@@ -202,7 +202,7 @@
 
         async function performAuth(endpoint, payload) {
             try {
-                const res = await fetch(`http://localhost:5000${endpoint}`, {
+                const res = await fetch(`https://corpqueryx.onrender.com${endpoint}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -231,7 +231,7 @@
         // --- DOCUMENT MANAGEMENT ---
         async function loadDocuments() {
             try {
-                const res = await fetch('http://localhost:5000/api/documents', {
+                const res = await fetch('https://corpqueryx.onrender.com/api/documents', {
                     headers: { 'x-auth-token': token }
                 });
                 const docs = await res.json();
@@ -260,7 +260,7 @@
             if (!confirm('Are you sure you want to delete this document? The AI will forget it immediately.')) return;
 
             try {
-                const res = await fetch(`http://localhost:5000/api/documents/${id}`, {
+                const res = await fetch(`https://corpqueryx.onrender.com/api/documents/${id}`, {
                     method: 'DELETE',
                     headers: { 'x-auth-token': token }
                 });
@@ -280,7 +280,7 @@
             const new_role = document.getElementById('promoteRole').value;
 
             try {
-                const res = await fetch('http://localhost:5000/api/admin/promote', {
+                const res = await fetch('https://corpqueryx.onrender.com/api/admin/promote', {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
@@ -311,7 +311,7 @@
             const loadingDiv = addMessage("Thinking...", 'ai-msg');
 
             try {
-                const res = await fetch('http://localhost:5000/api/chat', {
+                const res = await fetch('https://corpqueryx.onrender.com/api/chat', {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
@@ -349,7 +349,7 @@
             document.getElementById('uploadStatus').innerText = "⏳ Uploading...";
 
             try {
-                const res = await fetch('http://localhost:5000/api/documents/upload', {
+                const res = await fetch('https://corpqueryx.onrender.com/api/documents/upload', {
                     method: 'POST',
                     headers: { 'x-auth-token': token },
                     body: formData
