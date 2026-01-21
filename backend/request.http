@@ -1,0 +1,26 @@
+### 1. Register a New User
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "ShubhamBoss",
+  "email": "shubham@corpqueryx.com",
+  "password": "secretpassword123",
+  "role_id": 1
+}
+
+### 2. Login (To get the Token)
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "shubham@corpqueryx.com",
+  "password": "secretpassword123"
+}
+
+### 3. Try to access Secret Route (Without Token) -> Should Fail
+GET http://localhost:5000/api/secret
+
+### 4. Try to access Secret Route (WITH Token) -> Should Work
+GET http://localhost:5000/api/secret
+x-auth-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoxLCJyb2xlX2lkIjoxfSwiaWF0IjoxNzY5MDE1MTMzLCJleHAiOjE3NjkwMTg3MzN9.UdcJW6orxLravXmX8MfbDYpiVyLucN6wy7Bow20EKtg

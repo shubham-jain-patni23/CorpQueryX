@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CorpQueryX - AI Brain</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; background: #f0f2f5; }
+        
+        /* Layout */
+        .sidebar { width: 350px; background: white; padding: 20px; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+        .main { flex: 1; display: flex; flex-direction: column; background: #e5ddd5; }
+
+        /* Forms */
+        input, button { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+        button { background: #008069; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #006d59; }
+        .status { margin-top: 10px; font-size: 14px; color: #555; }
+
+        /* Chat Window */
+        .chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .message { max-width: 70%; padding: 10px 15px; border-radius: 10px; line-height: 1.4; font-size: 15px; }
+        .user-msg { align-self: flex-end; background: #d9fdd3; color: #111; }
+        .ai-msg { align-self: flex-start; background: white; color: #111; border: 1px solid #ddd; }
+        .sources { font-size: 12px; color: #666; margin-top: 5px; font-style: italic; }
+
+        /* Input Area */
+        .input-area { background: #f0f2f5; padding: 15px; border-top: 1px solid #ddd; display: flex; gap: 10px; }
+        .input-area input { margin: 0; }
+        .input-area button { width: auto; margin: 0; padding: 0 20px; }
+
+        h2 { margin-top: 0; color: #008069; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>CorpQueryX 🚀</h2>
+        
+        <div id="authSection">
+            <input type="email" id="email" placeholder="Email" value="ceo@corp.com">
+            <input type="password" id="password" placeholder="Password" value="admin123">
+            <button onclick="login()">Login to System</button>
+        </div>
+        <div id="userInfo" style="display:none; color: green; font-weight: bold; margin-bottom: 15px;">
+            ✅ Logged In
+        </div>
+
+        <hr>
+
+        <h3>📤 Feed the Brain</h3>
+        <input type="text" id="docTitle" placeholder="Document Title (e.g. HR Policy)">
+        <input type="file" id="fileInput">
+        <button onclick="uploadFile()">Upload & Train AI</button>
+        <div id="uploadStatus" class="status"></div>
+    </div>
+
+    <div class="main">
+        <div class="chat-box" id="chatBox">
+            <div class="message ai-msg">
+                Hello! I have read your documents. Ask me anything. 🤖
+            </div>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="questionInput" placeholder="Ask a question about your documents..." onkeypress="handleEnter(event)">
+            <button onclick="askAI()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        let token = localStorage.getItem('token');
+        if (token) showLoginSuccess();
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const res = await fetch('http://localhost:5000/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    token = data.token;
+                    localStorage.setItem('token', token);
+                    showLoginSuccess();
+                } else {
+                    alert('Login Failed: ' + data.msg);
+                }
+            } catch (err) { alert('Error connecting to server'); }
+        }
+
+        function showLoginSuccess() {
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('userInfo').style.display = 'block';
+        }
+
+        async function uploadFile() {
+            if (!token) return alert('Please login first!');
+            const fileInput = document.getElementById('fileInput');
+            const title = document.getElementById('docTitle').value;
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('title', title);
+
+            document.getElementById('uploadStatus').innerText = "⏳ Uploading & Processing...";
+
+            try {
+                const res = await fetch('http://localhost:5000/api/documents/upload', {
+                    method: 'POST',
+                    headers: { 'x-auth-token': token },
+                    body: formData
+                });
+                const data = await res.json();
+                document.getElementById('uploadStatus').innerText = res.ok ? 
+                    "✅ Success! AI has learned this." : "❌ Error: " + data.msg;
+            } catch (err) { document.getElementById('uploadStatus').innerText = "❌ Network Error"; }
+        }
+
+        async function askAI() {
+            const question = document.getElementById('questionInput').value;
+            if (!question || !token) return;
+
+            // Add User Message
+            addMessage(question, 'user-msg');
+            document.getElementById('questionInput').value = '';
+
+            // Add Loading...
+            const loadingDiv = addMessage("Thinking...", 'ai-msg');
+
+            try {
+                const res = await fetch('http://localhost:5000/api/chat', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-auth-token': token 
+                    },
+                    body: JSON.stringify({ question })
+                });
+                const data = await res.json();
+                
+                // Remove Loading
+                loadingDiv.remove();
+
+                // Show AI Answer
+                if (data.answer) {
+                    const sourceText = data.sources && data.sources.length > 0 ? 
+                        `<div class="sources">📚 Source: ${data.sources.join(', ')}</div>` : '';
+                    addMessage(data.answer + sourceText, 'ai-msg', true);
+                } else {
+                    addMessage("I couldn't find an answer.", 'ai-msg');
+                }
+            } catch (err) {
+                loadingDiv.innerText = "❌ Error reaching the brain.";
+            }
+        }
+
+        function addMessage(text, className, isHTML = false) {
+            const div = document.createElement('div');
+            div.className = `message ${className}`;
+            if (isHTML) div.innerHTML = text;
+            else div.innerText = text;
+            document.getElementById('chatBox').appendChild(div);
+            document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
+            return div;
+        }
+
+        function handleEnter(e) {
+            if (e.key === 'Enter') askAI();
+        }
+    </script>
+</body>
+</html>
