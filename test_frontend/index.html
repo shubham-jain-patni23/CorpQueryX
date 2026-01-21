@@ -147,7 +147,7 @@
 
         function checkLoginState() {
             if (token) {
-                // Decode token to find Role
+                // Decode token to find Rol
                 try {
                     const payload = JSON.parse(atob(token.split('.')[1]));
                     currentUserRole = payload.user.role_id;
