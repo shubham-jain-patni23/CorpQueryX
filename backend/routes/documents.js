@@ -22,6 +22,13 @@ const upload = multer({ storage: storage });
 
 router.post('/upload', auth, upload.single('file'), async (req, res) => {
     try {
+        // --- 🔒 NEW SECURITY CHECK ---
+        // If the user's role is LESS than 10, kick them out.
+        if (req.user.role_id < 10) {
+            console.log(`🚫 Blocked upload attempt by User ID ${req.user.id} (Level ${req.user.role_id})`);
+            return res.status(403).json({ msg: 'Access Denied: Only Level 10 (Admins) can upload documents.' });
+        }
+        // -----------------------------
         const { title, min_role_level } = req.body;
         const filePath = req.file.path;
         const userId = req.user.id;
@@ -65,14 +72,21 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
         console.log("🧠 Generating AI Embeddings...");
         const vector = await getEmbedding(fileContent);
 
-        // 4. Save to Qdrant (Curl Wrapper)
-        console.log("💾 Saving to Qdrant...");
+        // // 4. Save to Qdrant (Curl Wrapper)
+        // console.log("💾 Saving to Qdrant...");
+        
+        // 4. Save to Qdrant (With Security Stamp)
+        console.log(`💾 Saving to Qdrant (Security Level: ${min_role_level || 10})...`);
         
         const payload = {
             points: [{
                 id: docId,
                 vector: vector,
-                payload: { text: fileContent, metadata: { title: title } }
+                payload: { 
+                    text: fileContent, 
+                    metadata: { title: title },
+                    min_role_level: parseInt(min_role_level) || 10 // <--- THE SECURITY STAMP
+                }
             }]
         };
 
@@ -102,6 +116,69 @@ router.post('/upload', auth, upload.single('file'), async (req, res) => {
     } catch (err) {
         console.error("❌ Processing Error:", err);
         res.status(500).send('Server Error: ' + err.message);
+    }
+});
+
+// --- DELETE DOCUMENT (Admin Only) ---
+router.delete('/:id', auth, async (req, res) => {
+    try {
+        // 1. Security Check (Admins Only)
+        if (req.user.role_id < 10) {
+            return res.status(403).json({ msg: 'Access Denied' });
+        }
+
+        const docId = req.params.id;
+
+        // 2. Get File Info (to find the path)
+        const docResult = await db.query('SELECT * FROM documents WHERE id = $1', [docId]);
+        if (docResult.rows.length === 0) {
+            return res.status(404).json({ msg: 'Document not found' });
+        }
+        const file = docResult.rows[0];
+
+        // 3. Delete from Qdrant (The Brain)
+        // We use the "points/delete" endpoint
+        const qdrantUrl = process.env.QDRANT_URL.replace(/\/$/, '');
+        const apiKey = process.env.QDRANT_API_KEY;
+        
+        const deletePayload = JSON.stringify({ points: [parseInt(docId)] });
+        const tempDeletePath = path.join('/tmp', `delete_${Date.now()}.json`);
+        fs.writeFileSync(tempDeletePath, deletePayload);
+
+        const cmd = `curl -X POST "${qdrantUrl}/collections/corp_documents/points/delete" -H "api-key: ${apiKey}" -H "Content-Type: application/json" -d @${tempDeletePath}`;
+
+        exec(cmd, async (error, stdout, stderr) => {
+            if (fs.existsSync(tempDeletePath)) fs.unlinkSync(tempDeletePath);
+            
+            // 4. Delete Physical File
+            if (fs.existsSync(file.file_path)) {
+                fs.unlinkSync(file.file_path);
+            }
+
+            // 5. Delete from Database
+            await db.query('DELETE FROM documents WHERE id = $1', [docId]);
+
+            console.log(`🗑️ Deleted Document ID ${docId}: ${file.title}`);
+            res.json({ msg: 'Document Deleted Successfully' });
+        });
+
+    } catch (err) {
+        console.error("Delete Error:", err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// --- LIST DOCUMENTS (New Route to see what to delete) ---
+router.get('/', auth, async (req, res) => {
+    try {
+        // Admins see all, others see only their level? 
+        // For simplicity, let's just list everything for Admins to manage.
+        if (req.user.role_id < 10) return res.status(403).json({ msg: 'Admin only' });
+
+        const result = await db.query('SELECT id, title, created_at, min_role_level FROM documents ORDER BY id DESC');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).send('Server Error');
     }
 });
 

@@ -1,78 +1,84 @@
 // CorpQueryX/backend/routes/auth.js
 
 const express = require('express');
+const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const db = require('../config/db'); // Talk to the DB
-const router = express.Router();
+const db = require('../config/db');
 
-// 1. REGISTER ROUTE (Sign Up)
+// --- REGISTER ---
 router.post('/register', async (req, res) => {
-    const { username, email, password, role_id } = req.body;
+    const { name, email, password } = req.body;
 
     try {
-        // Check if user already exists
+        // 1. Check if user exists
         const userCheck = await db.query('SELECT * FROM users WHERE email = $1', [email]);
         if (userCheck.rows.length > 0) {
             return res.status(400).json({ msg: 'User already exists' });
         }
 
-        // Encrypt the password (Hash it)
+        // 2. Hash Password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Save to Database
-        // Note: We default role_id to 3 (Intern) if not provided, for safety
+        // 3. Save User (FILLING BOTH 'username' AND 'name' TO SATISFY DB)
         const newUser = await db.query(
-            'INSERT INTO users (username, email, password, role_id) VALUES ($1, $2, $3, $4) RETURNING id, username, email',
-            [username, email, hashedPassword, role_id || 3]
+            'INSERT INTO users (username, name, email, password, role_id) VALUES ($1, $1, $2, $3, 1) RETURNING id, username, email, role_id',
+            [name, email, hashedPassword]
         );
 
-        res.json({ msg: 'User registered successfully', user: newUser.rows[0] });
+        // 4. Create Token (Auto-Login)
+        const payload = { user: { id: newUser.rows[0].id, role_id: 1 } };
+        jwt.sign(
+            payload, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '1h' }, 
+            (err, token) => {
+                if (err) throw err;
+                res.json({ token, user: newUser.rows[0] });
+            }
+        );
 
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error("Register Error:", err.message);
+        res.status(500).send('Server error');
     }
 });
 
-// 2. LOGIN ROUTE (Sign In)
+// --- LOGIN ---
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        // Find user by email
-        const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email]);
-        
-        if (userResult.rows.length === 0) {
+        // 1. Check User
+        const result = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (result.rows.length === 0) {
             return res.status(400).json({ msg: 'Invalid Credentials' });
         }
 
-        const user = userResult.rows[0];
+        const user = result.rows[0];
 
-        // Check password
+        // 2. Check Password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({ msg: 'Invalid Credentials' });
         }
 
-        // Create the "ID Card" (JWT Token)
-        const payload = {
-            user: {
-                id: user.id,
-                role_id: user.role_id // <--- CRITICAL for our RBAC security later
+        // 3. Return Token
+        const payload = { user: { id: user.id, role_id: user.role_id } };
+        jwt.sign(
+            payload, 
+            process.env.JWT_SECRET, 
+            { expiresIn: '1h' }, 
+            (err, token) => {
+                if (err) throw err;
+                res.json({ token, user: { id: user.id, name: user.username, role_id: user.role_id } });
             }
-        };
-
-        // Sign the token (It expires in 1 hour)
-        jwt.sign(payload, 'secret_random_string', { expiresIn: '1h' }, (err, token) => {
-            if (err) throw err;
-            res.json({ token, user: { id: user.id, username: user.username, role_id: user.role_id } });
-        });
+        );
 
     } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error');
+        console.error("Login Error:", err.message);
+        res.status(500).send('Server error');
     }
 });
 

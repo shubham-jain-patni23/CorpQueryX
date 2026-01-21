@@ -8,16 +8,30 @@
         body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; background: #f0f2f5; }
         
         /* Layout */
-        .sidebar { width: 350px; background: white; padding: 20px; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+        .sidebar { width: 350px; background: white; padding: 20px; border-right: 1px solid #ddd; display: flex; flex-direction: column; overflow-y: auto; }
         .main { flex: 1; display: flex; flex-direction: column; background: #e5ddd5; }
 
         /* Forms */
-        input, button { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+        input, button, select { width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
         button { background: #008069; color: white; border: none; cursor: pointer; font-weight: bold; }
         button:hover { background: #006d59; }
+        
+        .secondary-btn { background: #666; margin-top: 5px; }
+        .secondary-btn:hover { background: #555; }
+        
+        .logout-btn { background: #d32f2f; margin-top: auto; }
+        .logout-btn:hover { background: #b71c1c; }
+
+        .link { color: #008069; cursor: pointer; text-decoration: underline; font-size: 14px; text-align: center; margin-bottom: 10px; display: block; }
+
         .status { margin-top: 10px; font-size: 14px; color: #555; }
 
         /* Chat Window */
+        .header { background: #f0f2f5; padding: 10px 20px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
+        .header h3 { margin: 0; color: #333; }
+        .clear-chat { background: transparent; color: #555; border: 1px solid #ccc; width: auto; font-size: 13px; padding: 5px 10px; }
+        .clear-chat:hover { background: #ddd; color: black; }
+
         .chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
         .message { max-width: 70%; padding: 10px 15px; border-radius: 10px; line-height: 1.4; font-size: 15px; }
         .user-msg { align-self: flex-end; background: #d9fdd3; color: #111; }
@@ -31,6 +45,7 @@
 
         h2 { margin-top: 0; color: #008069; }
         hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -38,100 +53,261 @@
     <div class="sidebar">
         <h2>CorpQueryX 🚀</h2>
         
-        <div id="authSection">
-            <input type="email" id="email" placeholder="Email" value="ceo@corp.com">
-            <input type="password" id="password" placeholder="Password" value="admin123">
-            <button onclick="login()">Login to System</button>
-        </div>
-        <div id="userInfo" style="display:none; color: green; font-weight: bold; margin-bottom: 15px;">
-            ✅ Logged In
+        <div id="loginSection">
+            <h3>Login</h3>
+            <input type="email" id="loginEmail" placeholder="Email" value="ceo@corp.com">
+            <input type="password" id="loginPassword" placeholder="Password" value="admin123">
+            <button onclick="login()">Login</button>
+            <span class="link" onclick="toggleAuth()">New here? Register</span>
         </div>
 
-        <hr>
+        <div id="registerSection" class="hidden">
+            <h3>Register</h3>
+            <input type="text" id="regName" placeholder="Full Name">
+            <input type="email" id="regEmail" placeholder="Email">
+            <input type="password" id="regPassword" placeholder="Password">
+            <button onclick="register()">Create Account</button>
+            <span class="link" onclick="toggleAuth()">Already have an account? Login</span>
+        </div>
 
-        <h3>📤 Feed the Brain</h3>
-        <input type="text" id="docTitle" placeholder="Document Title (e.g. HR Policy)">
-        <input type="file" id="fileInput">
-        <button onclick="uploadFile()">Upload & Train AI</button>
-        <div id="uploadStatus" class="status"></div>
+        <div id="dashboardSection" class="hidden" style="flex: 1; display: flex; flex-direction: column;">
+            <div style="color: green; font-weight: bold; margin-bottom: 15px;">
+                ✅ Welcome back!
+            </div>
+
+            <hr>
+
+            <div id="adminPanel" class="hidden" style="background: #e8f5e9; padding: 10px; border: 1px solid #4caf50; border-radius: 5px; margin-bottom: 20px;">
+                <h3 style="margin-top:0; color: #2e7d32; font-size: 16px;">👑 Admin Panel</h3>
+                
+                <div style="margin-bottom: 15px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+                    <label style="font-size:12px; font-weight:bold;">Promote User:</label>
+                    <input type="email" id="promoteEmail" placeholder="User Email">
+                    <select id="promoteRole">
+                        <option value="1">Intern (Lvl 1)</option>
+                        <option value="5">Manager (Lvl 5)</option>
+                        <option value="10">Admin (Lvl 10)</option>
+                    </select>
+                    <button onclick="promoteUser()" style="background: #2e7d32; font-size: 12px;">Update Role</button>
+                </div>
+
+                <div>
+                    <label style="font-size:12px; font-weight:bold;">Manage Documents:</label>
+                    <button onclick="loadDocuments()" style="background: #1b5e20; margin-bottom: 5px;">🔄 Refresh List</button>
+                    <div id="docList" style="max-height: 150px; overflow-y: auto; background: white; padding: 5px; border: 1px solid #ddd;">
+                        <div style="font-size: 12px; color: #666; text-align: center;">Click Refresh to see docs</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="uploadSection" class="hidden">
+                <h3>📤 Upload Document</h3>
+                <input type="text" id="docTitle" placeholder="Document Title">
+                
+                <label style="font-size: 12px; color: #666;">Security Clearance Required:</label>
+                <select id="roleLevel">
+                    <option value="1">Level 1 (Public / Intern)</option>
+                    <option value="5">Level 5 (Internal / Manager)</option>
+                    <option value="10">Level 10 (Top Secret / CEO)</option>
+                </select>
+                
+                <input type="file" id="fileInput">
+                <button onclick="uploadFile()">Upload & Train AI</button>
+                <div id="uploadStatus" class="status"></div>
+            </div>
+
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
     </div>
 
     <div class="main">
+        <div class="header">
+            <h3>AI Chat Assistant</h3>
+            <button class="clear-chat" onclick="newChat()">🧹 New Chat</button>
+        </div>
+
         <div class="chat-box" id="chatBox">
             <div class="message ai-msg">
-                Hello! I have read your documents. Ask me anything. 🤖
+                Hello! Please login to access the corporate brain. 🤖
             </div>
         </div>
 
         <div class="input-area">
-            <input type="text" id="questionInput" placeholder="Ask a question about your documents..." onkeypress="handleEnter(event)">
-            <button onclick="askAI()">Send</button>
+            <input type="text" id="questionInput" placeholder="Ask a question..." onkeypress="handleEnter(event)" disabled>
+            <button onclick="askAI()" id="sendBtn" disabled>Send</button>
         </div>
     </div>
 
     <script>
+        // --- 1. STATE MANAGEMENT ---
         let token = localStorage.getItem('token');
-        if (token) showLoginSuccess();
+        let currentUserRole = 0;
 
+        checkLoginState();
+
+        function checkLoginState() {
+            if (token) {
+                // Decode token to find Role
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    currentUserRole = payload.user.role_id;
+                    
+                    // Admin Logic
+                    if (currentUserRole >= 10) {
+                        document.getElementById('adminPanel').classList.remove('hidden');
+                        document.getElementById('uploadSection').classList.remove('hidden');
+                    } else {
+                        document.getElementById('adminPanel').classList.add('hidden');
+                        document.getElementById('uploadSection').classList.add('hidden');
+                    }
+                } catch (e) { console.error("Token parse error"); }
+
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('registerSection').classList.add('hidden');
+                document.getElementById('dashboardSection').classList.remove('hidden');
+                document.getElementById('dashboardSection').style.display = 'flex';
+                
+                // Enable Chat
+                document.getElementById('questionInput').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                addSystemMessage("Ready! I have access to documents matching your clearance.");
+            } else {
+                document.getElementById('loginSection').classList.remove('hidden');
+                document.getElementById('dashboardSection').classList.add('hidden');
+                
+                // Disable Chat
+                document.getElementById('questionInput').disabled = true;
+                document.getElementById('sendBtn').disabled = true;
+            }
+        }
+
+        function toggleAuth() {
+            document.getElementById('loginSection').classList.toggle('hidden');
+            document.getElementById('registerSection').classList.toggle('hidden');
+        }
+
+        // --- 2. AUTH FUNCTIONS ---
         async function login() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            await performAuth('/api/auth/login', { email, password });
+        }
+
+        async function register() {
+            const name = document.getElementById('regName').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            await performAuth('/api/auth/register', { name, email, password });
+        }
+
+        async function performAuth(endpoint, payload) {
             try {
-                const res = await fetch('http://localhost:5000/api/auth/login', {
+                const res = await fetch(`http://localhost:5000${endpoint}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
                 
                 if (res.ok) {
                     token = data.token;
                     localStorage.setItem('token', token);
-                    showLoginSuccess();
+                    checkLoginState();
                 } else {
-                    alert('Login Failed: ' + data.msg);
+                    alert('Error: ' + data.msg);
                 }
-            } catch (err) { alert('Error connecting to server'); }
+            } catch (err) { alert('Server Connection Error'); }
         }
 
-        function showLoginSuccess() {
-            document.getElementById('authSection').style.display = 'none';
-            document.getElementById('userInfo').style.display = 'block';
+        function logout() {
+            localStorage.removeItem('token');
+            token = null;
+            currentUserRole = 0;
+            newChat(); // Clear history on logout
+            addSystemMessage("Logged out successfully.");
+            checkLoginState();
         }
 
-        async function uploadFile() {
-            if (!token) return alert('Please login first!');
-            const fileInput = document.getElementById('fileInput');
-            const title = document.getElementById('docTitle').value;
-            
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-            formData.append('title', title);
+        // --- DOCUMENT MANAGEMENT ---
+        async function loadDocuments() {
+            try {
+                const res = await fetch('http://localhost:5000/api/documents', {
+                    headers: { 'x-auth-token': token }
+                });
+                const docs = await res.json();
+                
+                const list = document.getElementById('docList');
+                list.innerHTML = '';
 
-            document.getElementById('uploadStatus').innerText = "⏳ Uploading & Processing...";
+                if (docs.length === 0) {
+                    list.innerHTML = '<div style="font-size:12px; padding:5px;">No documents found.</div>';
+                    return;
+                }
+
+                docs.forEach(doc => {
+                    const item = document.createElement('div');
+                    item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 5px; font-size: 12px;';
+                    item.innerHTML = `
+                        <span title="ID: ${doc.id}">📄 ${doc.title} (Lvl ${doc.min_role_level})</span>
+                        <button onclick="deleteDocument(${doc.id})" style="background: #c62828; color: white; border: none; padding: 2px 8px; border-radius: 3px; cursor: pointer; width: auto; margin: 0;">✖</button>
+                    `;
+                    list.appendChild(item);
+                });
+            } catch (err) { alert('Failed to load documents'); }
+        }
+
+        async function deleteDocument(id) {
+            if (!confirm('Are you sure you want to delete this document? The AI will forget it immediately.')) return;
 
             try {
-                const res = await fetch('http://localhost:5000/api/documents/upload', {
-                    method: 'POST',
-                    headers: { 'x-auth-token': token },
-                    body: formData
+                const res = await fetch(`http://localhost:5000/api/documents/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'x-auth-token': token }
                 });
                 const data = await res.json();
-                document.getElementById('uploadStatus').innerText = res.ok ? 
-                    "✅ Success! AI has learned this." : "❌ Error: " + data.msg;
-            } catch (err) { document.getElementById('uploadStatus').innerText = "❌ Network Error"; }
+                if (res.ok) {
+                    loadDocuments(); // Refresh list
+                    addSystemMessage("🗑️ Document deleted from memory.");
+                } else {
+                    alert(data.msg);
+                }
+            } catch (err) { alert('Error deleting document'); }
+        }
+
+        // --- 3. ADMIN FUNCTIONS (New!) ---
+        async function promoteUser() {
+            const email = document.getElementById('promoteEmail').value;
+            const new_role = document.getElementById('promoteRole').value;
+
+            try {
+                const res = await fetch('http://localhost:5000/api/admin/promote', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-auth-token': token 
+                    },
+                    body: JSON.stringify({ email, new_role })
+                });
+                const data = await res.json();
+                alert(data.msg);
+            } catch (err) { alert('Error promoting user'); }
+        }
+
+        // --- 4. CHAT FUNCTIONS ---
+        function newChat() {
+            const chatBox = document.getElementById('chatBox');
+            chatBox.innerHTML = '';
+            addSystemMessage("Chat cleared. Start a new conversation.");
         }
 
         async function askAI() {
-            const question = document.getElementById('questionInput').value;
+            const input = document.getElementById('questionInput');
+            const question = input.value;
             if (!question || !token) return;
 
-            // Add User Message
             addMessage(question, 'user-msg');
-            document.getElementById('questionInput').value = '';
+            input.value = '';
 
-            // Add Loading...
             const loadingDiv = addMessage("Thinking...", 'ai-msg');
 
             try {
@@ -144,11 +320,8 @@
                     body: JSON.stringify({ question })
                 });
                 const data = await res.json();
-                
-                // Remove Loading
                 loadingDiv.remove();
 
-                // Show AI Answer
                 if (data.answer) {
                     const sourceText = data.sources && data.sources.length > 0 ? 
                         `<div class="sources">📚 Source: ${data.sources.join(', ')}</div>` : '';
@@ -161,14 +334,46 @@
             }
         }
 
+        // --- 5. UPLOAD FUNCTION ---
+        async function uploadFile() {
+            if (!token) return alert('Please login first!');
+            const fileInput = document.getElementById('fileInput');
+            const title = document.getElementById('docTitle').value;
+            const level = document.getElementById('roleLevel').value;
+            
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('min_role_level', level);
+            formData.append('file', fileInput.files[0]);
+
+            document.getElementById('uploadStatus').innerText = "⏳ Uploading...";
+
+            try {
+                const res = await fetch('http://localhost:5000/api/documents/upload', {
+                    method: 'POST',
+                    headers: { 'x-auth-token': token },
+                    body: formData
+                });
+                const data = await res.json();
+                document.getElementById('uploadStatus').innerText = res.ok ? 
+                    "✅ Success!" : "❌ Error: " + data.msg;
+            } catch (err) { document.getElementById('uploadStatus').innerText = "❌ Network Error"; }
+        }
+
+        // Helpers
         function addMessage(text, className, isHTML = false) {
             const div = document.createElement('div');
             div.className = `message ${className}`;
             if (isHTML) div.innerHTML = text;
             else div.innerText = text;
-            document.getElementById('chatBox').appendChild(div);
-            document.getElementById('chatBox').scrollTop = document.getElementById('chatBox').scrollHeight;
+            const chatBox = document.getElementById('chatBox');
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
             return div;
+        }
+
+        function addSystemMessage(text) {
+            addMessage(text, 'ai-msg');
         }
 
         function handleEnter(e) {

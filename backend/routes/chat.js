@@ -11,33 +11,53 @@ const auth = require('../middleware/authMiddleware');
 router.post('/', auth, async (req, res) => {
     try {
         const { question } = req.body;
+        // 1. GET USER CLEARANCE LEVEL
+        // Default to Level 1 (Intern) if undefined
+        const userRoleLevel = req.user.role_id || 1; 
+
         if (!question) return res.status(400).json({ msg: 'Question is required' });
 
-        console.log(`🤔 User asked: "${question}"`);
+        console.log(`🤔 User (Level ${userRoleLevel}) asked: "${question}"`);
 
-        // 1. Turn Question into Vector
+        // 2. Turn Question into Vector
         const queryVector = await getEmbedding(question);
 
-        // 2. Search Qdrant (using Curl Wrapper)
-        console.log("🔍 Searching Brain...");
+        // 3. Search Qdrant WITH SECURITY FILTER
+        console.log("🔍 Searching Brain with Clearance Check...");
         
-        // Create temp search payload
         const searchPayload = {
             vector: queryVector,
-            limit: 3, // Get top 3 most relevant chunks
-            with_payload: true
+            limit: 3,
+            with_payload: true,
+            filter: {
+                must: [
+                    {
+                        key: "min_role_level",
+                        range: {
+                            lte: userRoleLevel // User can only see docs <= their level
+                        }
+                    }
+                ]
+            }
         };
+
         const tempSearchPath = path.join('/tmp', `search_${Date.now()}.json`);
         fs.writeFileSync(tempSearchPath, JSON.stringify(searchPayload));
 
-        // Prepare Curl Command
         const qdrantUrl = process.env.QDRANT_URL.replace(/\/$/, '');
         const apiKey = process.env.QDRANT_API_KEY;
         const cmd = `curl -s -X POST "${qdrantUrl}/collections/corp_documents/points/search" -H "api-key: ${apiKey}" -H "Content-Type: application/json" -d @${tempSearchPath}`;
 
-        // Execute Search
+        
+
+        // --- 🕵️‍♂️ ADD THIS DEBUG BLOCK ---
+        console.log("------------------------------------------------");
+        console.log("🔍 DEBUG: Sending Search to Qdrant:");
+        console.log(JSON.stringify(searchPayload, null, 2));
+        console.log("------------------------------------------------");
+        // ------------------------------------------------
+
         exec(cmd, async (error, stdout, stderr) => {
-            // Cleanup
             if (fs.existsSync(tempSearchPath)) fs.unlinkSync(tempSearchPath);
 
             if (error) {
@@ -45,20 +65,22 @@ router.post('/', auth, async (req, res) => {
                 return res.status(500).json({ msg: 'Search failed' });
             }
 
-            // Parse Qdrant Results
             const response = JSON.parse(stdout);
             const results = response.result || [];
 
+            //
+            console.log(`📊 DEBUG: Qdrant returned ${results.length} matches.`);
+            // -----------------------------
+
             if (results.length === 0) {
-                return res.json({ answer: "I couldn't find any relevant documents." });
+                console.log("🚫 Access Denied or No Info Found.");
+                return res.json({ answer: "I cannot find any information available for your security clearance." });
             }
 
-            // 3. Extract Text from Results
+            // 4. Found Allowed Docs -> Generate Answer
             const contextText = results.map(item => item.payload.text).join("\n\n---\n\n");
-            console.log("📄 Found Context:", contextText.substring(0, 100) + "...");
+            console.log(`📄 Found ${results.length} valid documents.`);
 
-            // 4. Generate Answer with Gemini
-            console.log("🤖 Generating Answer...");
             const aiAnswer = await generateAnswer(question, contextText);
 
             res.json({ 
